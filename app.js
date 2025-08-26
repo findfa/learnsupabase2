@@ -9,15 +9,25 @@ document.addEventListener("DOMContentLoaded", () => {
       const email = document.getElementById("signup-email").value;
       const password = document.getElementById("signup-password").value;
 
-      const { error } = await supabase.auth.signUp({ email, password });
+      // Sign up user
+      const { data: signupData, error: signupError } = await supabase.auth.signUp({ email, password });
 
       const messageDiv = document.getElementById("signup-message");
-      if (error) {
-        messageDiv.textContent = error.message;
+      if (signupError) {
+        messageDiv.textContent = signupError.message;
         messageDiv.style.color = "red";
       } else {
         messageDiv.textContent = "Signup successful! Check your email to confirm.";
         messageDiv.style.color = "green";
+
+        // Automatically create profile for the user in 'profiles' table
+        if (signupData.user) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert([{ id: signupData.user.id }]);  // only id is required, full_name optional
+
+          if (profileError) console.error("Error creating profile:", profileError.message);
+        }
       }
     });
   }
@@ -30,18 +40,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const email = document.getElementById("login-email").value;
       const password = document.getElementById("login-password").value;
 
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
 
       const messageDiv = document.getElementById("login-message");
-      if (error) {
-        messageDiv.textContent = error.message;
+      if (loginError) {
+        messageDiv.textContent = loginError.message;
         messageDiv.style.color = "red";
       } else {
         messageDiv.textContent = "Login successful! Redirecting...";
         messageDiv.style.color = "green";
-        setTimeout(() => {
-          window.location.href = "dashboard.html";
-        }, 1500);
+        setTimeout(() => window.location.href = "dashboard.html", 1500);
       }
     });
   }
@@ -54,13 +62,13 @@ document.addEventListener("DOMContentLoaded", () => {
       window.location.href = "index.html";
     });
 
-    // Check session on dashboard
-    checkSession();
+    // Check session and fetch profile
+    loadDashboard();
   }
 });
 
-// Check if user is logged in
-async function checkSession() {
+// Check session and fetch profile
+async function loadDashboard() {
   const { data: { session } } = await supabase.auth.getSession();
   const userEmail = document.getElementById("user-email");
 
@@ -68,6 +76,19 @@ async function checkSession() {
     // not logged in → redirect
     window.location.href = "index.html";
   } else {
-    userEmail.textContent = `Logged in as: ${session.user.email}`;
+    // Fetch user profile
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', session.user.id)
+      .single();
+
+    if (error) {
+      console.error("Error fetching profile:", error.message);
+      userEmail.textContent = `Logged in as: ${session.user.email}`;
+    } else {
+      const name = profile.full_name || session.user.email;
+      userEmail.textContent = `Welcome, ${name}`;
+    }
   }
 }
