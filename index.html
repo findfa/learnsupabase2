@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Login</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/@supabase/supabase-js"></script>
+  <script src="config.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <h2>Login</h2>
+    <form id="login-form">
+      <input type="email" id="login-email" placeholder="Email" required>
+      <input type="password" id="login-password" placeholder="Password" required>
+      <button type="submit">Login</button>
+    </form>
+    <p>Don't have an account? <a href="signup.html">Signup</a></p>
+    <div id="login-message"></div>
+  </div>
+</body>
+</html>
