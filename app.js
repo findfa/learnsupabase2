@@ -9,25 +9,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const email = document.getElementById("signup-email").value;
       const password = document.getElementById("signup-password").value;
 
-      // Sign up user
-      const { data: signupData, error: signupError } = await supabase.auth.signUp({ email, password });
+      const { data: user, error } = await supabase.auth.signUp({ email, password });
 
       const messageDiv = document.getElementById("signup-message");
-      if (signupError) {
-        messageDiv.textContent = signupError.message;
+      if (error) {
+        messageDiv.textContent = error.message;
         messageDiv.style.color = "red";
       } else {
         messageDiv.textContent = "Signup successful! Check your email to confirm.";
         messageDiv.style.color = "green";
 
-        // Automatically create profile for the user in 'profiles' table
-        if (signupData.user) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert([{ id: signupData.user.id }]);  // only id is required, full_name optional
-
-          if (profileError) console.error("Error creating profile:", profileError.message);
-        }
+        // Optionally insert profile row (if trigger not used)
+        await supabase.from('profiles').insert([{ id: user.user.id }]);
       }
     });
   }
@@ -40,16 +33,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const email = document.getElementById("login-email").value;
       const password = document.getElementById("login-password").value;
 
-      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       const messageDiv = document.getElementById("login-message");
-      if (loginError) {
-        messageDiv.textContent = loginError.message;
+      if (error) {
+        messageDiv.textContent = error.message;
         messageDiv.style.color = "red";
       } else {
         messageDiv.textContent = "Login successful! Redirecting...";
         messageDiv.style.color = "green";
-        setTimeout(() => window.location.href = "dashboard.html", 1500);
+        setTimeout(() => {
+          window.location.href = "dashboard.html";
+        }, 1500);
       }
     });
   }
@@ -62,33 +57,35 @@ document.addEventListener("DOMContentLoaded", () => {
       window.location.href = "index.html";
     });
 
-    // Check session and fetch profile
-    loadDashboard();
+    // Load profile if on dashboard
+    loadProfile();
   }
 });
 
-// Check session and fetch profile
-async function loadDashboard() {
-  const { data: { session } } = await supabase.auth.getSession();
-  const userEmail = document.getElementById("user-email");
+// Load the current user's profile (RLS ensures user sees only their row)
+async function loadProfile() {
+  const { data: session } = await supabase.auth.getSession();
 
-  if (!session) {
-    // not logged in → redirect
-    window.location.href = "index.html";
-  } else {
-    // Fetch user profile
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single();
+  if (!session || !session.user) {
+    window.location.href = "index.html"; // redirect if not logged in
+    return;
+  }
 
-    if (error) {
-      console.error("Error fetching profile:", error.message);
-      userEmail.textContent = `Logged in as: ${session.user.email}`;
-    } else {
-      const name = profile.full_name || session.user.email;
-      userEmail.textContent = `Welcome, ${name}`;
-    }
+  const user = session.user;
+
+  // Fetch profile safely under RLS
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .single(); // RLS automatically filters by auth.uid()
+
+  if (error) {
+    console.error("Error fetching profile:", error.message);
+    return;
+  }
+
+  document.getElementById('user-email').textContent = `Email: ${user.email}`;
+  if (profile && profile.full_name) {
+    document.getElementById('user-fullname').textContent = `Name: ${profile.full_name}`;
   }
 }
