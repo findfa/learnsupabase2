@@ -8,20 +8,34 @@ document.addEventListener("DOMContentLoaded", () => {
       e.preventDefault();
       const email = document.getElementById("signup-email").value;
       const password = document.getElementById("signup-password").value;
+      const fullName = document.getElementById("signup-fullname").value;
 
-      const { data: user, error } = await supabase.auth.signUp({ email, password });
+      // 1️⃣ Create user with Supabase Auth
+      const { data: userData, error: signupError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
 
       const messageDiv = document.getElementById("signup-message");
-      if (error) {
-        messageDiv.textContent = error.message;
+      if (signupError) {
+        messageDiv.textContent = signupError.message;
         messageDiv.style.color = "red";
-      } else {
-        messageDiv.textContent = "Signup successful! Check your email to confirm.";
-        messageDiv.style.color = "green";
-
-        // Optionally insert profile row (if trigger not used)
-        await supabase.from('profiles').insert([{ id: user.user.id }]);
+        return;
       }
+
+      // 2️⃣ Insert profile with full_name (RLS ensures this is allowed)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([{ id: userData.user.id, full_name: fullName }]);
+
+      if (profileError) {
+        messageDiv.textContent = profileError.message;
+        messageDiv.style.color = "red";
+        return;
+      }
+
+      messageDiv.textContent = "Signup successful! Check your email to confirm.";
+      messageDiv.style.color = "green";
     });
   }
 
@@ -64,14 +78,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // Load the current user's profile (RLS ensures user sees only their row)
 async function loadProfile() {
-  const { data: session } = await supabase.auth.getSession();
+  const { data: sessionData } = await supabase.auth.getSession();
 
-  if (!session || !session.user) {
+  if (!sessionData || !sessionData.session) {
     window.location.href = "index.html"; // redirect if not logged in
     return;
   }
 
-  const user = session.user;
+  const user = sessionData.session.user;
 
   // Fetch profile safely under RLS
   const { data: profile, error } = await supabase
